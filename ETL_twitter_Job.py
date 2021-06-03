@@ -1,8 +1,3 @@
-import json
-import urllib.parse
-import re
-from pprint import pprint
-
 # The DAG object; we'll need this to instantiate a DAG
 from airflow import DAG
 
@@ -21,39 +16,38 @@ from pymongo import MongoClient
 default_args = {
     'owner': 'Andre_Alba',
 }
-@dag(default_args=default_args, schedule_interval=None, start_date=days_ago(2), tags=['elt_twitter'])
+@dag(default_args=default_args, schedule_interval="@daily", start_date=days_ago(2), tags=['elt_twitter'])
 def etl_twitter():
+    
+    bearer_token = '--'
+
+
+    client = tweepy.Client(bearer_token)
  
+    result = client.search_recent_tweets(query=" moon ", max_results=1000,tweet_fields=["text,created_at"])
+
+
     @task()
     def extract():
-        # consumer_key = 'PJjdcjZ6haAWTe9Uz1Q0yAhnn'
-        # consumer_secret = 'nokn6ZTOPf6lfcnZJlMsx1BctTnbC5PRGJtCOy0D0DiU7znn6R'
-        bearer_token = 'AAAAAAAAAAAAAAAAAAAAAO8BQQEAAAAA3GQ1%2BF4QuhbiqWhgwBenrxYE2Gs%3DviVybWMsnrEZSOB4O2EoiPhyWi6abmdznxE0SXSTg8JhrFtb3N'
-
-        # auth = tweepy.AppAuthHandler(consumer_key, consumer_secret)
-        # api = tweepy.API(auth)
-        client = tweepy.Client(bearer_token)
- 
-
-        result = client.search_recent_tweets(query=" moon ", max_results=10,tweet_fields=["text,created_at"])
-
-        return result 
-
-        
-    @task(multiple_outputs=True)
-    def transform(t_data: list)->list:
+    
         processed_data = list()
-        
-        for post_info in t_data.data:
+        for post_info in result.data:
             processed_data.append(
                 {
-                    'created_at':post_info.created_at,
+                    'created_at':str(post_info.created_at),
                     'text':post_info.text
                 }
             )
         
 
         return processed_data
+
+        
+    @task()
+    def transform(processed_data: list)->list:
+
+        return processed_data
+
 
     @task()
     def load(data_inserction: list):
