@@ -1,59 +1,70 @@
-from airflow.decorators import dag, task
-from airflow.utils.dates import days_ago
+import json
+import urllib.parse
+import re
 from pprint import pprint
 
+# The DAG object; we'll need this to instantiate a DAG
+from airflow import DAG
+
+# Operators; we need this to operate!
+from airflow.utils.dates import days_ago
+from airflow.decorators import dag, task
+import tweepy
+from pymongo import MongoClient
+
+
+# [END import_module]
+
+
+# These args will get passed on to each operator
+# You can override them on a per-task basis during operator initialization
 default_args = {
-    'owner': 'airflow',
+    'owner': 'Andre_Alba',
 }
-
-'''
-# For configure mongoDB acess
-bucket_name = '<Your_Bucket>'
-db_name = '<Database_Name>'
-dataset = '<Dataset_Name>'
-table_name = '<Table_Name>'
-'''
-
-
-# [START instantiate_dag]
-@dag(default_args=default_args, schedule_interval=None, start_date=days_ago(2), tags=['example'])
-def taskflow_etl_twitter():
-
+@dag(default_args=default_args, schedule_interval=None, start_date=days_ago(2), tags=['elt_twitter'])
+def etl_twitter():
+ 
     @task()
     def extract():
+        # consumer_key = 'PJjdcjZ6haAWTe9Uz1Q0yAhnn'
+        # consumer_secret = 'nokn6ZTOPf6lfcnZJlMsx1BctTnbC5PRGJtCOy0D0DiU7znn6R'
+        bearer_token = 'AAAAAAAAAAAAAAAAAAAAAO8BQQEAAAAA3GQ1%2BF4QuhbiqWhgwBenrxYE2Gs%3DviVybWMsnrEZSOB4O2EoiPhyWi6abmdznxE0SXSTg8JhrFtb3N'
 
-        data_string = 'teste'
+        # auth = tweepy.AppAuthHandler(consumer_key, consumer_secret)
+        # api = tweepy.API(auth)
+        client = tweepy.Client(bearer_token)
+ 
 
-        order_data_dict = data_string
-        return order_data_dict
+        result = client.search_recent_tweets(query=" moon ", max_results=10,tweet_fields=["text,created_at"])
 
-    # [END extract]
+        return result 
 
-    # [START transform]
+        
     @task(multiple_outputs=True)
-    def transform(order_data_dict: dict):
+    def transform(t_data: list)->list:
+        processed_data = list()
+        
+        for post_info in t_data.data:
+            processed_data.append(
+                {
+                    'created_at':post_info.created_at,
+                    'text':post_info.text
+                }
+            )
+        
 
-        return {"total_order_value ->": order_data_dict}
+        return processed_data
 
-    # [END transform]
-
-    # [START load]
     @task()
-    def load():
+    def load(data_inserction: list):
 
-        print("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        client = MongoClient("172.19.0.2", 27017)
+        db = client.twitter
+        twitter_posts = db.twitter_posts
+        twitter_posts.insert(data_inserction)
+        
 
-    # [END load]
-
-    # [START main_flow]
     order_data = extract()
     order_summary = transform(order_data)
-    load()
-    # [END main_flow]
-
-
-# [START dag_invocation]
-tutorial_etl_dag = taskflow_etl_twitter()
-# [END dag_invocation]
-
-# [END tutorial]
+    load(order_summary)
+etl_dag_twitter = etl_twitter()
